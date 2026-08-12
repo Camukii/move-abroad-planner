@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Move Abroad Planner · Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #F7F3EE;
+    min-height: 100vh;
+    padding: 24px 20px;
+    color: #2D2A27;
+  }
+  input[type=range] { accent-color: #7C9885; }
+  input { font-family: inherit; }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    border: 1px solid #EEE8E0;
+  }
+  .label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9B8F82;
+    margin-bottom: 4px;
+  }
+  .big { font-size: 26px; font-weight: 700; font-family: Georgia, serif; line-height: 1.1; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid-charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 { font-family: Georgia, serif; font-size: 32px; font-weight: 700; color: #2D2A27; }
+  .header .sub { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8F82; margin-bottom: 6px; }
+  .header .tiny { font-size: 12px; color: #9B8F82; margin-top: 4px; }
+  .countdown-card { background: #7C9885 !important; border-color: #7C9885 !important; }
+  .editable-input {
+    border: none; background: none; font-size: 15px; font-weight: 600;
+    color: #2D2A27; width: 100%; outline: none; padding: 0; cursor: text;
+  }
+  .progress-bar-bg { height: 6px; background: #F0EBE4; border-radius: 99px; }
+  .progress-bar-fill { height: 6px; border-radius: 99px; transition: width 0.6s ease; }
+  .savings-bar-bg { height: 10px; background: #F0EBE4; border-radius: 99px; margin-top: 12px; }
+  .savings-bar-fill { height: 10px; border-radius: 99px; background: linear-gradient(90deg, #7C9885, #B5C9BC); transition: width 0.6s ease; }
+  .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #C4B8AC; }
+  @media (max-width: 700px) {
+    .grid-4, .grid-2, .grid-3, .grid-charts { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = Recharts;
+
+const COLORS = ["#7C9885","#B5C9BC","#D4A5A5","#A8B8D0","#C9B99A","#E8C5A0"];
+
+const initialBudget = [
+  { category: "Flight",    budget: 1200, spent: 1200 },
+  { category: "Housing",   budget: 1800, spent: 900  },
+  { category: "Health",    budget: 1600, spent: 0    },
+  { category: "Transport", budget: 300,  spent: 50   },
+  { category: "Docs",      budget: 400,  spent: 0    },
+  { category: "Daily life",budget: 500,  spent: 0    },
+];
+
+const tasks = [
+  { label: "Research & Vision",    total: 6, done: 6 },
+  { label: "Planning & Learning",  total: 8, done: 5 },
+  { label: "Official Steps",       total: 7, done: 2 },
+  { label: "Logistics",            total: 6, done: 0 },
+  { label: "Final Prep",           total: 8, done: 0 },
+];
+
+function useCountdown(departure) {
+  const [days, setDays] = useState(null);
+  useEffect(() => {
+    const calc = () => {
+      const target = new Date(departure + "-01");
+      const diff = target - new Date();
+      setDays(Math.max(0, Math.ceil(diff / 86400000)));
+    };
+    calc();
+    const t = setInterval(calc, 60000);
+    return () => clearInterval(t);
+  }, [departure]);
+  return days;
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:"#fff", border:"1px solid #EEE8E0", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+      <div style={{ fontWeight:600, marginBottom:4 }}>{label}</div>
+      {payload.map((p,i) => <div key={i} style={{ color:p.color }}>{p.name}: €{p.value.toLocaleString()}</div>)}
+    </div>
+  );
+};
+
+function App() {
+  const [destination, setDestination] = useState("Sydney, Australia");
+  const [departure, setDeparture] = useState("2027-07");
+  const [saved, setSaved] = useState(5000);
+  const [goal, setGoal] = useState(10000);
+  const days = useCountdown(departure);
+  const savingsPct = Math.min(100, Math.round((saved / goal) * 100));
+  const totalBudget = initialBudget.reduce((s,d) => s + d.budget, 0);
+  const totalSpent  = initialBudget.reduce((s,d) => s + d.spent, 0);
+  const leftToSpend = totalBudget - totalSpent;
+  const pieData = initialBudget.map(d => ({ name: d.category, value: d.budget }));
+  const today = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" });
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="header">
+        <div className="sub">All the important information at your fingertips</div>
+        <h1>🌍 Move Abroad Planner</h1>
+        <div className="tiny">Overview Dashboard</div>
+      </div>
+
+      {/* Row 1 */}
+      <div className="grid-4">
+        <div className="card">
+          <div className="label">Destination</div>
+          <input className="editable-input" value={destination} onChange={e => setDestination(e.target.value)} />
+        </div>
+        <div className="card">
+          <div className="label">Departure</div>
+          <input type="month" value={departure} onChange={e => setDeparture(e.target.value)}
+            style={{ border:"none", background:"none", fontSize:15, fontWeight:600, color:"#2D2A27", outline:"none", padding:0 }} />
+        </div>
+        <div className="card countdown-card">
+          <div className="label" style={{ color:"#C9DDD1" }}>Countdown</div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+            <div className="big" style={{ color:"#fff" }}>{days ?? "—"}</div>
+            <span style={{ color:"#C9DDD1", fontSize:13 }}>days left</span>
+          </div>
+        </div>
+        <div className="card">
+          <div className="label">Today</div>
+          <div className="big" style={{ fontSize:18 }}>{today}</div>
+        </div>
+      </div>
+
+      {/* Row 2 */}
+      <div className="grid-2">
+        <div className="card">
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <div className="label">💰 Savings Progress</div>
+            <span style={{ fontSize:11, color:"#9B8F82" }}>
+              Goal: €
+              <input type="number" value={goal} onChange={e => setGoal(Number(e.target.value))}
+                style={{ border:"none", background:"none", fontSize:11, color:"#9B8F82", width:60, outline:"none" }} />
+            </span>
+          </div>
+          <div style={{ display:"flex", gap:24, marginBottom:12 }}>
+            <div><div className="label">Saved</div><div className="big" style={{ color:"#7C9885" }}>€{saved.toLocaleString()}</div></div>
+            <div><div className="label">Remaining</div><div className="big" style={{ color:"#D4A5A5" }}>€{(goal-saved).toLocaleString()}</div></div>
+            <div><div className="label">Progress</div><div className="big">{savingsPct}%</div></div>
+          </div>
+          <div className="savings-bar-bg">
+            <div className="savings-bar-fill" style={{ width:`${savingsPct}%` }} />
+          </div>
+          <div style={{ marginTop:12, display:"flex", gap:8, alignItems:"center" }}>
+            <span style={{ fontSize:11, color:"#9B8F82" }}>Adjust:</span>
+            <input type="range" min={0} max={goal} value={saved} onChange={e => setSaved(Number(e.target.value))} style={{ flex:1 }} />
+            <span style={{ fontSize:11, color:"#9B8F82" }}>€{saved.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="label">✅ Task Progress by Phase</div>
+          <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:10 }}>
+            {tasks.map((t,i) => {
+              const pct = Math.round((t.done / t.total) * 100);
+              return (
+                <div key={i}>
+                  <div style={{ fontSize:12, fontWeight:500, marginBottom:2 }}>{t.label}</div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#9B8F82", marginBottom:3 }}>
+                    <span>{t.done}/{t.total} done</span><span>{pct}%</span>
+                  </div>
+                  <div className="progress-bar-bg">
+                    <div className="progress-bar-fill" style={{ width:`${pct}%`, background: COLORS[i % COLORS.length] }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3 */}
+      <div className="grid-3">
+        <div className="card">
+          <div className="label">Total Budget</div>
+          <div className="big">€{totalBudget.toLocaleString()}</div>
+        </div>
+        <div className="card">
+          <div className="label">Total Spent</div>
+          <div className="big" style={{ color:"#D4A5A5" }}>€{totalSpent.toLocaleString()}</div>
+        </div>
+        <div className="card">
+          <div className="label">Left to Spend</div>
+          <div className="big" style={{ color:"#7C9885" }}>€{leftToSpend.toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* Row 4: Charts */}
+      <div className="grid-charts">
+        <div className="card">
+          <div className="label">📊 Budget vs Spent by Category</div>
+          <div style={{ marginTop:12 }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={initialBudget} barCategoryGap="30%">
+                <XAxis dataKey="category" tick={{ fontSize:10, fill:"#9B8F82" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize:10, fill:"#9B8F82" }} axisLine={false} tickLine={false} tickFormatter={v=>`€${v}`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize:11 }} />
+                <Bar dataKey="budget" name="Budget" fill="#B5C9BC" radius={[4,4,0,0]} />
+                <Bar dataKey="spent"  name="Spent"  fill="#7C9885" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="label">🥧 Expense Breakdown</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={pieData} cx="50%" cy="45%" innerRadius={55} outerRadius={80} dataKey="value" paddingAngle={3}>
+                {pieData.map((_,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={v=>`€${v}`} />
+              <Legend wrapperStyle={{ fontSize:10 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="footer">
+        Move Abroad Planner · Dashboard · Edit destination and departure above · Data updates automatically
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
